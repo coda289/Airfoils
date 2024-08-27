@@ -21,7 +21,7 @@ x_max = 50
 #Amount of points taken along boundry condition
 bound_num = 50
 #Amount of points to evaluate each step
-points_num = 10000
+points_num = 1000
 
 #path to airfoil data
 path = 'ah79100b.dat'
@@ -48,7 +48,8 @@ def read_data(path):
 airfoil_points = read_data(path)
 
 #turns the array into a tensor
-t_airfoil_points = torch.tensor(airfoil_points,dtype=torch.float32,requires_grad=True)
+t_airfoil_points = torch.tensor(
+    airfoil_points,dtype=torch.float32,requires_grad=True)
 
 #returns the points from the boundry condition
 #returns random points for the network to use
@@ -124,7 +125,7 @@ def normal_data(data):
     #print('normals',normals)
     normals = torch.tensor(normals,requires_grad=True)
     #print('tensor',normals)
-    print("normals more than once")
+
     return normals
 
 n_data = normal_data(airfoil_points)
@@ -219,7 +220,7 @@ class PINN:
 
         return u, v, p
     
-    def bc_loss1(self, X,U_inf=1,AoA=1):
+    def bc_loss1(self, X,U_inf=1,AoA=0):
         u, v = self.predict(X)[0:2]
 
         mse_bc = torch.mean(torch.square(u - U_inf*np.cos(AoA))) + torch.mean(
@@ -231,7 +232,6 @@ class PINN:
     def bc_loss2(self,X,n_data):
         u,v = self.predict(X)[0:2]
         uv = torch.concatenate([u,v], axis=1)
-        
         
         mse_bc = torch.mean(
             torch.square(
@@ -292,7 +292,7 @@ class PINN:
 
         if(self.iter%200 == 0):
             print(f" It: {self.iter} Loss: {loss.item():.5e} BC1: {mse_bc1.item():.3e} BC2: {mse_bc2.item():.3e} pde: {mse_pde.item():.3e}"
-)
+                )
 
         return loss
     

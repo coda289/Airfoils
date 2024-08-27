@@ -6,16 +6,17 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
-y_min = -2
+y_min = -2.1
 y_max = 2
 x_min = -2
 x_max = 2
 
 pinn = PINN()
 
-pinn.net.load_state_dict(torch.load("c:/Users/DakotaBarnhardt/Downloads/Airfoils/Param.pt"))
+pinn.net.load_state_dict(torch.load(
+        "c:/Users/DakotaBarnhardt/Downloads/Airfoils/Param.pt"))
 
-step_size = .1
+step_size = .001
 
 x = np.arange(x_min, x_max, step_size)
 y = np.arange(y_min, y_max, step_size)
@@ -55,7 +56,8 @@ labels = ["u(x,y)","v(x,y)", "p(x,y)"]
 for i in range(3):
     ax = axes[i]
     im = ax.imshow(
-        data[i], cmap="rainbow", extent=[x_min, x_max, y_min, y_max], origin="lower"
+        data[i], cmap="rainbow", 
+        extent=[x_min, x_max, y_min, y_max], origin="lower"
     )
     divider = make_axes_locatable(ax)
     cax = divider.append_axes("right", size="3%", pad="3%")

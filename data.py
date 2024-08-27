@@ -152,9 +152,12 @@ def read_data(path):
         airfoilPoints.append(point)
     return airfoilPoints
 
-t1=torch.tensor([[1,1],[2,2],[3,3]])
-t2=torch.tensor([[4,4],[5,5],[6,6]])
-t3=torch.tensor([[7,7],[8,8],[9,9]])
-t4=torch.concatenate([t1,t2])
-t5=torch.concatenate([t4,t3])
-print(t5)
+u=torch.tensor([[1],[0],[3],[4],[5]])
+v=torch.tensor([[0],[1],[7],[6],[4]])
+uv=torch.concatenate([u,v], axis=1)
+n_data=torch.tensor([[0,1],[-1,0],[-7,3],[-6,4],[-4,5]])
+x=uv*n_data
+
+x=torch.sum(x,dim=1)
+
+
