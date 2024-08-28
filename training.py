@@ -257,12 +257,13 @@ class PINN:
         dvdy = dv_out[:, 1:2]
         dpdx = dp_out[:, 0:1]
         dpdy = dp_out[:, 1:2]
-      
+    
 
         fc = dudx + dvdy
         fx = (u*dudx + v*dudy)+(1/rho)*dpdx
         fy = (u*dvdx + v*dvdy) +(1/rho)*dpdy
-
+        print("dudx",dudx[0:5])
+        print('dvdx',dvdx[0:5])
 
         mse_fc = torch.mean(torch.square(fc))
         mse_fx = torch.mean(torch.square(fx))
@@ -274,6 +275,7 @@ class PINN:
     
     def closure(self):
 
+        self.lbfgs.zero_grad()
         self.adam.zero_grad()
 
         mse_bc1 = self.bc_loss1(bc1)
@@ -301,6 +303,7 @@ if __name__  ==  "__main__":
     for i in range(4000):
         pinn.closure()
         pinn.adam.step()
+    pinn.lbfgs.step(pinn.closure)
     torch.save(pinn.net.state_dict(), "c:/Users/DakotaBarnhardt/Downloads/Airfoils/Param.pt")
     plotLoss(pinn.losses, "c:/Users/DakotaBarnhardt/Downloads/Airfoils/LossCurve.png", ["BC1", "BC2", "PDE"])
 

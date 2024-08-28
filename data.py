@@ -3,6 +3,8 @@ from shapely.geometry import Point
 from shapely.geometry.polygon import Polygon
 import numpy as np
 import torch
+import matplotlib.patches as patches
+
 
 
 data2 = [[0,0],
@@ -152,6 +154,9 @@ def read_data(path):
         airfoilPoints.append(point)
     return airfoilPoints
 
+normal_data(read_data('ah79100b.dat'))
+plt.show()
+
 u=torch.tensor([[1],[0],[3],[4],[5]])
 v=torch.tensor([[0],[1],[7],[6],[4]])
 uv=torch.concatenate([u,v], axis=1)
@@ -161,3 +166,20 @@ x=uv*n_data
 x=torch.sum(x,dim=1)
 
 
+
+fig, axes = plt.subplots(3, 1, figsize=(11, 12), sharex=True)
+
+polygon_vertices = read_data('ah79100b.dat')
+
+# Create a Polygon patch
+polygon = patches.Polygon(polygon_vertices, closed=True, fill=True, edgecolor='r', facecolor='g', alpha=0.5)
+
+# Add the polygon to the first subplot
+axes[0].add_patch(polygon)
+
+# Set limits for the axes
+axes[0].set_xlim(0, 1)
+axes[0].set_ylim(-.1, 1)
+
+# Display the plot
+plt.show()
