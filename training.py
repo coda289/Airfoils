@@ -2,11 +2,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn as nn
-from torch.autograd import grad
 from mpl_toolkits.axes_grid1 import make_axes_locatable
+from readcsv import CSV
 from shapely.geometry import Point
 from shapely.geometry.polygon import Polygon
-from readcsv import CSV
+from torch.autograd import grad
+
 
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
@@ -26,6 +27,10 @@ points_num = 1000
 
 #path to airfoil data
 path = 'ah79100b.dat'
+
+validation_data=CSV.read_data('flow.csv')
+list, xy_actual = CSV.tsplit_data(validation_data)
+uvp_act=list[2:5]
 
 #Reads a '.dat' file of airfoil data
 def read_data(path):
@@ -123,10 +128,7 @@ def normal_data(data):
         else:
             next = None
         normals.append([normaly,normalx])
-    #print('normals',normals)
     normals = torch.tensor(normals,requires_grad=True)
-    #print('tensor',normals)
-
     return normals
 
 n_data = normal_data(airfoil_points)
@@ -188,12 +190,12 @@ class DNN(nn.Module):
 class PINN:
 
    #TODO change to represent real life
-    U_inf = 1
+    U_inf = 50
     rho = 1
     AoA = 0
     
     def __init__(self) -> None:
-        self.net = DNN(dim_in=2, dim_out=3, n_layer=4, n_node=50).to(
+        self.net = DNN(dim_in=2, dim_out=3, n_layer=10, n_node=128).to(
             device
         )
 
@@ -209,7 +211,9 @@ class PINN:
         )
 
         self.adam = torch.optim.Adam(self.net.parameters(), lr=5e-4)
-        self.losses = {"bc1": [], "bc2": [], "pde": []}
+        self.losses = {"l1": [], "l2": [], "l3": []}
+
+        # self.losses = {"bc1": [], "bc2": [], "pde": []}
         self.iter = 0
 
     def predict(self, X):
@@ -221,7 +225,7 @@ class PINN:
 
         return u, v, p
     
-    def bc_loss1(self, X,U_inf=1,AoA=0):
+    def bc_loss1(self, X,U_inf=50,AoA=0):
         u, v = self.predict(X)[0:2]
 
         mse_bc = torch.mean(torch.square(u - U_inf*np.cos(AoA))) + torch.mean(
@@ -273,33 +277,61 @@ class PINN:
 
         return mse_pde
     
+    def mse_loss(self, X, actual):
+        X = X.clone()
+        #X.requires_grad = True
+        pred_u, pred_v, pred_p = self.predict(X)
+        pred_u = pred_u.view(-1,1)
+        
+        loss_func = nn.MSELoss()
+        u,v,p = actual[0], actual[1], actual[2]
+        u = u.view(-1,1)
+        v = v.view(-1,1)
+        p = p.view(-1,1)
+
+        loss1 = loss_func(pred_u,u)
+        loss2 = loss_func(pred_v,v)
+        loss3 = loss_func(pred_p,p)    
+
+        loss=loss1+loss2+loss3
+
+        return loss,loss1,loss2,loss3
+
+
     def closure(self):
 
         self.lbfgs.zero_grad()
         self.adam.zero_grad()
 
-        mse_bc1 = self.bc_loss1(bc1)
-        mse_bc2 = self.bc_loss2(t_airfoil_points,n_data)
-        mse_pde = self.pde_loss(rand_points)
+        #mse_bc1 = self.bc_loss1(bc1)
+        #mse_bc2 = self.bc_loss2(t_airfoil_points,n_data)
+        #mse_pde = self.pde_loss(rand_points)
 
-        loss = mse_bc1 + mse_bc2 + mse_pde
-
+        loss, l1,l2,l3= self.mse_loss(xy_actual,uvp_act)
+        self.loss=loss
         loss.backward()
-        
-        self.losses["bc1"].append(mse_bc1.detach().cpu().item())
-        self.losses["bc2"].append(mse_bc2.detach().cpu().item())
-        self.losses["pde"].append(mse_pde.detach().cpu().item())
+        self.losses["l1"].append(l1.detach().cpu().item())
+        self.losses["l2"].append(l2.detach().cpu().item())
+        self.losses["l3"].append(l3.detach().cpu().item())
+
+
+        #self.losses["bc1"].append(mse_bc1.detach().cpu().item())
+        #self.losses["bc2"].append(mse_bc2.detach().cpu().item())
+        #self.losses["pde"].append(mse_pde.detach().cpu().item())
         
         self.iter +=  1
 
-        if(self.iter%200 == 0):
-            print(f" It: {self.iter} Loss: {loss.item():.5e} BC1: {mse_bc1.item():.3e} BC2: {mse_bc2.item():.3e} pde: {mse_pde.item():.3e}"
-                )
+        #if(self.iter%200 == 0):
+        #    print(f" It: {self.iter} Loss: {loss.item():.5e} BC1: {mse_bc1.item():.3e} BC2: {mse_bc2.item():.3e} pde: {mse_pde.item():.3e}"
+        #        )
+
+        if(self.iter%200==0):
+            print(self.iter,"loss:",loss," loss u:",l1," loss v:",l2," loss p:",l3)
 
         return loss
     
     def validate(self,actual):
-        actual=actual[0:10][0:100]
+        #actual=actual[0:10][0:100]
         xy,au,av,ap=CSV.tsplit_data(actual)
         #X = xy.clone()
         pred_u, pred_v, pred_p = self.predict(xy)
@@ -317,16 +349,16 @@ class PINN:
     
 if __name__  ==  "__main__":
     pinn = PINN()
-    for i in range(4000):
+    while(pinn.iter<1000 or pinn.loss<1e-8):
+
         pinn.closure()
         pinn.adam.step()
+
     pinn.lbfgs.step(pinn.closure)
     torch.save(pinn.net.state_dict(), "c:/Users/DakotaBarnhardt/Downloads/Airfoils/Param.pt")
-    plotLoss(pinn.losses, "c:/Users/DakotaBarnhardt/Downloads/Airfoils/LossCurve.png", ["BC1", "BC2", "PDE"])
+    plotLoss(pinn.losses, "c:/Users/DakotaBarnhardt/Downloads/Airfoils/LossCurve.png", ["l1","l2","l3"])
 
-    validation_data=CSV.read_data('flow.csv') 
-    pinn.validate(validation_data)
-
+    
 
 
 

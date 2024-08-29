@@ -183,3 +183,27 @@ axes[0].set_ylim(-.1, 1)
 
 # Display the plot
 plt.show()
+
+
+x_min=0
+x_max=10
+y_min=0
+y_max=10
+step_size=1
+x = np.arange(x_min, x_max, step_size)
+y = np.arange(y_min, y_max, step_size)
+print('1 x',x,'\n1y',y)
+X, Y = np.meshgrid(x, y)
+print('\n2 X',X,'\n 2 Y',Y)
+
+x = X.reshape(-1, 1)
+y = Y.reshape(-1, 1)
+print('\n3 x',x,'\n3y',y)
+
+xyn = np.concatenate([x, y], axis=1)
+print('4xyn',xyn)
+
+xyn = np.array(xyn)
+print('5xyn',xyn)
+xy = torch.tensor(xyn, dtype=torch.float32)
+print('6xy',xy)

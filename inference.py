@@ -1,9 +1,9 @@
-from training import PINN 
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
-from mpl_toolkits.axes_grid1 import make_axes_locatable
 import matplotlib.patches as patches
+from training import PINN 
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 from shapely.geometry import Point
 from shapely.geometry.polygon import Polygon
 
@@ -93,6 +93,7 @@ for i in range(3):
     ax.set_xlabel("x")
     ax.set_ylabel("y")
     ax.set_aspect("equal")
+plt.axis('equal')
     
 
 fig.tight_layout()
