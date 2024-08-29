@@ -20,19 +20,20 @@ class CSV():
         p=data[0]
         u=data[1] 
         v=data[2] 
-        pc=data[4] 
-        d=data[5]
+        #pc=data[4] 
+        #d=data[5]
         x=data[6] 
         y=data[7] 
-        p=torch.tensor(p,dtype=torch.float32,requires_grad=True)
-        u=torch.tensor(u,dtype=torch.float32,requires_grad=True)
-        v=torch.tensor(v,dtype=torch.float32,requires_grad=True)
-        x=torch.tensor(x,dtype=torch.float32,requires_grad=True)
-        y=torch.tensor(y,dtype=torch.float32,requires_grad=True)
+        p=torch.tensor(p,dtype=torch.float32)
+        u=torch.tensor(u,dtype=torch.float32)
+        v=torch.tensor(v,dtype=torch.float32)
+        x=torch.tensor(x,dtype=torch.float32)
+        y=torch.tensor(y,dtype=torch.float32)
         xy = torch.cat([x.unsqueeze(1), y.unsqueeze(1)], dim=-1)
-        xy=torch.tensor(xy,dtype=torch.float32,requires_grad=True)
+        xy=torch.tensor(xy,dtype=torch.float32)
+        print('done here')
         return xy,u,v,p
 
-if __name__=='__main__':
-    data=CSV.read_data('flow.csv')
-    CSV.tsplit_data(data)
+
+    read_data('flow.csv')
+

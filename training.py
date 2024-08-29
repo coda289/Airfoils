@@ -299,18 +299,20 @@ class PINN:
         return loss
     
     def validate(self,actual):
+        actual=actual[0:10][0:100]
         xy,au,av,ap=CSV.tsplit_data(actual)
-        X = xy.clone()
-
-        pred_u, pred_v, pred_p = self.predict(X)
-        u=au-pred_u
-        v=av-pred_v
-        p=ap-pred_p
-        loss=torch.mean(torch.square(u)+torch.square(v)+torch.square(p))
+        #X = xy.clone()
+        pred_u, pred_v, pred_p = self.predict(xy)
+        critereon=nn.MSELoss()
+        u=critereon(pred_u,au)
+        v=critereon(av,pred_v)
+        p=critereon(ap,pred_p)
+        loss=u+v+p
         print('u loss',torch.mean(u))
         print('v loss',torch.mean(v))
         print('p loss',torch.mean(p))
         print('total',loss)
+        return
 
     
 if __name__  ==  "__main__":
@@ -322,8 +324,8 @@ if __name__  ==  "__main__":
     torch.save(pinn.net.state_dict(), "c:/Users/DakotaBarnhardt/Downloads/Airfoils/Param.pt")
     plotLoss(pinn.losses, "c:/Users/DakotaBarnhardt/Downloads/Airfoils/LossCurve.png", ["BC1", "BC2", "PDE"])
 
-    data=CSV.read_data('flow.csv')
-    pinn.validate(data)
+    validation_data=CSV.read_data('flow.csv') 
+    pinn.validate(validation_data)
 
 
 
