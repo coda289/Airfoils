@@ -6,6 +6,7 @@ from torch.autograd import grad
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from shapely.geometry import Point
 from shapely.geometry.polygon import Polygon
+from readcsv import CSV
 
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
@@ -262,8 +263,7 @@ class PINN:
         fc = dudx + dvdy
         fx = (u*dudx + v*dudy)+(1/rho)*dpdx
         fy = (u*dvdx + v*dvdy) +(1/rho)*dpdy
-        print("dudx",dudx[0:5])
-        print('dvdx',dvdx[0:5])
+  
 
         mse_fc = torch.mean(torch.square(fc))
         mse_fx = torch.mean(torch.square(fx))
@@ -298,6 +298,21 @@ class PINN:
 
         return loss
     
+    def validate(self,actual):
+        xy,au,av,ap=CSV.tsplit_data(actual)
+        X = xy.clone()
+
+        pred_u, pred_v, pred_p = self.predict(X)
+        u=au-pred_u
+        v=av-pred_v
+        p=ap-pred_p
+        loss=torch.mean(torch.square(u)+torch.square(v)+torch.square(p))
+        print('u loss',torch.mean(u))
+        print('v loss',torch.mean(v))
+        print('p loss',torch.mean(p))
+        print('total',loss)
+
+    
 if __name__  ==  "__main__":
     pinn = PINN()
     for i in range(4000):
@@ -307,7 +322,8 @@ if __name__  ==  "__main__":
     torch.save(pinn.net.state_dict(), "c:/Users/DakotaBarnhardt/Downloads/Airfoils/Param.pt")
     plotLoss(pinn.losses, "c:/Users/DakotaBarnhardt/Downloads/Airfoils/LossCurve.png", ["BC1", "BC2", "PDE"])
 
-
+    data=CSV.read_data('flow.csv')
+    pinn.validate(data)
 
 
 

@@ -4,31 +4,34 @@ import matplotlib.pyplot as plt
 import torch
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import matplotlib.patches as patches
-
+from shapely.geometry import Point
+from shapely.geometry.polygon import Polygon
 
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
+#reads the airfoil data 
+# given as a path to a .dat file
 def read_data(path):
+
     with open(path,'r') as f:
-        fileLines = f.readlines()
+        file_lines = f.readlines()
+    file_lines.pop(0)
+    airfoil_points=[]
 
-    fileLines.pop(0)
-
-    airfoilPoints=[]
-    for line in fileLines:
-        point=line.split(' ')
+    for line in file_lines:
+        point = line.split(' ')
         while point.__contains__(''):
             point.remove('')
-        point[0]=float(point[0])
-        point[1]=float(point[1][0:len(point[1])-2])
-        airfoilPoints.append(point)
-    return airfoilPoints
+        point[0] = float(point[0])
+        point[1] = float(point[1][0:len(point[1])-2])
+        airfoil_points.append(point)
+    return airfoil_points
 
 y_min = -1
 y_max = 1
 x_min = -1
 x_max = 2
-airfoil_p = read_data('ah79100b.dat')
+airfoil_points= read_data('ah79100b.dat')
 
 pinn = PINN()
 
@@ -47,8 +50,10 @@ y = Y.reshape(-1, 1)
 
 xyn = np.concatenate([x, y], axis=1)
 xy = []
+polygon = Polygon(airfoil_points)
 for x in xyn:
-    if (((x[0] - 0.25)**2 + (x[1] - 0.04)**2)**(0.5)) < 0.02:
+    point = Point(x[0],x[1])
+    if polygon.contains(point):
         xy.append([0, 0])
     else:
         xy.append([x[0], x[1]])
@@ -72,11 +77,11 @@ with torch.no_grad():
 fig, axes = plt.subplots(3, 1, figsize=(11, 12), sharex=True)
 data = (u, v, p)
 labels = ["u(x,y)","v(x,y)", "p(x,y)"]
-polygon = patches.Polygon(airfoil_p, closed=True, fill=True, edgecolor='w', facecolor='w', alpha=0.5)
+polygon = patches.Polygon(airfoil_points, closed=True, fill=True, edgecolor='w', facecolor='w', alpha=0.5)
 for i in range(3):
     ax = axes[i]
-    polygon = patches.Polygon(airfoil_p, closed=True, fill=True, edgecolor='w', facecolor='w', alpha=0.5)
-    ax.add_patch(polygon)
+    #polygon = patches.Polygon(airfoil_points, closed=True, fill=True, edgecolor='w', facecolor='w', alpha=0.5)
+    #ax.add_patch(polygon)
     im = ax.imshow(
         data[i], cmap="rainbow", 
         extent=[x_min, x_max, y_min, y_max], origin="lower"
