@@ -36,9 +36,10 @@ class CSV():
         x=torch.tensor(x,dtype=torch.float32)
         y=torch.tensor(y,dtype=torch.float32)
         xy = torch.cat([x.unsqueeze(1), y.unsqueeze(1)], dim=-1)
-        uvp = torch.cat([u.unsqueeze(1), v.unsqueeze(1), p.unsqueeze(1)], dim=-1)
-        uvp = torch.tensor(uvp,dtype=torch.float32,requires_grad=True)
-        xy=torch.tensor(xy,dtype=torch.float32,requires_grad=True)
+        xy.clone().detach().requires_grad_(True)
+        #xy=torch.tensor(xy,dtype=torch.float32,requires_grad=True)
+        #uvp = torch.cat([u.unsqueeze(1), v.unsqueeze(1), p.unsqueeze(1)], dim=-1)
+        #uvp = torch.tensor(uvp,dtype=torch.float32,requires_grad=True)
         return [x,y,u,v,p],xy
 
 '''

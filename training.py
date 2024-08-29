@@ -77,7 +77,8 @@ def make_graph(data):
     c3 = torch.stack((bottom_wallx, bottom_wally), dim=1)
     bc1 = torch.concatenate([c1,c2])
     bc1 = torch.concatenate([bc1,c3])
-    bc1 = torch.tensor(bc1, dtype=torch.float32, requires_grad=True)
+    bc1.clone().detach().requires_grad_(True)
+    #bc1 = torch.tensor(bc1,dtype=torch.float32, requires_grad=True)
     x = []
     y = []
     xy = []
@@ -190,7 +191,7 @@ class DNN(nn.Module):
 class PINN:
 
    #TODO change to represent real life
-    U_inf = 50
+    U_inf = 10
     rho = 1
     AoA = 0
     
@@ -225,7 +226,7 @@ class PINN:
 
         return u, v, p
     
-    def bc_loss1(self, X,U_inf=50,AoA=0):
+    def bc_loss1(self, X,U_inf=10,AoA=0):
         u, v = self.predict(X)[0:2]
 
         mse_bc = torch.mean(torch.square(u - U_inf*np.cos(AoA))) + torch.mean(
