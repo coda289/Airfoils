@@ -8,7 +8,6 @@ from shapely.geometry import Point
 from shapely.geometry.polygon import Polygon
 from torch.autograd import grad
 
-
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
 torch.manual_seed(1234)
@@ -21,16 +20,16 @@ x_min = -50
 x_max = 50
 
 #Amount of points taken along boundry condition
-bound_num = 50
+bound_num = 60
 #Amount of points to evaluate each step
-points_num = 1000
+points_num = 2000
 
 #path to airfoil data
-path = 'ah79100b.dat'
+path_to_points = 'ah79100b.dat'
 
-validation_data=CSV.read_data('flow.csv')
-list, xy_actual = CSV.tsplit_data(validation_data)
-uvp_act=list[2:5]
+validation_data = CSV.read_data('flow.csv')
+uvp_list, xy_actual = CSV.tsplit_data(validation_data)
+uvp_act = uvp_list[2:5]
 
 #Reads a '.dat' file of airfoil data
 def read_data(path):
@@ -51,7 +50,7 @@ def read_data(path):
     return airfoilPoints
 
 #turns the data into an array
-airfoil_points = read_data(path)
+airfoil_points = read_data(path_to_points)
 
 #turns the array into a tensor
 t_airfoil_points = torch.tensor(
@@ -68,6 +67,7 @@ def make_graph(data):
     top_wally = torch.ones_like(front_wally)*y_max
     bottom_wallx = torch.linspace(x_min, x_max, bound_num)
     bottom_wally = torch.ones_like(front_wally)*y_min
+
     #graph points
     plt.scatter(front_wallx, front_wally, marker='o')
     plt.scatter(top_wallx, top_wally, marker='o')
@@ -75,8 +75,8 @@ def make_graph(data):
     c1 = torch.stack((front_wallx, front_wally), dim=1)
     c2 = torch.stack((top_wallx, top_wally), dim=1)
     c3 = torch.stack((bottom_wallx, bottom_wally), dim=1)
-    bc1 = torch.concatenate([c1,c2])
-    bc1 = torch.concatenate([bc1,c3])
+    bc1 = torch.concatenate([c1,c2,c3])
+    #bc1 = torch.concatenate([bc1,c3])
     bc1.clone().detach().requires_grad_(True)
     #bc1 = torch.tensor(bc1,dtype=torch.float32, requires_grad=True)
     x = []
@@ -84,9 +84,17 @@ def make_graph(data):
     xy = []
     polygon = Polygon(data)
     #generate and validate data
-    while len(xy)<points_num:
+    while len(xy)<points_num/2:
         xp = np.random.uniform(x_min, x_max)
         yp = np.random.uniform(y_min, y_max)
+        point = Point(xp,yp)
+        if not polygon.contains(point):
+            x.append(xp)
+            y.append(yp)
+            xy.append([xp, yp])
+    while len(xy)<points_num:
+        xp = np.random.uniform(-.2, 1.2)
+        yp = np.random.uniform(-.5, .5)
         point = Point(xp,yp)
         if not polygon.contains(point):
             x.append(xp)
@@ -129,6 +137,8 @@ def normal_data(data):
         else:
             next = None
         normals.append([normaly,normalx])
+    normals=np.array(normals)
+    normals=np.linalg.norm(normals,axis=1,keepdims=True)
     normals = torch.tensor(normals,requires_grad=True)
     return normals
 
@@ -190,7 +200,7 @@ class DNN(nn.Module):
 #
 class PINN:
 
-   #TODO change to represent real life
+#TODO change to represent real life
     U_inf = 10
     rho = 1
     AoA = 0
@@ -212,9 +222,9 @@ class PINN:
         )
 
         self.adam = torch.optim.Adam(self.net.parameters(), lr=5e-4)
-        self.losses = {"l1": [], "l2": [], "l3": []}
-
-        # self.losses = {"bc1": [], "bc2": [], "pde": []}
+        #self.losses = {"l1": [], "l2": [], "l3": []}
+        self.losses = {"bc1": [], "bc2": [], "pde": [],"l1": [], "l2": [], "l3": []}
+        #self.losses = {"bc1": [], "bc2": [], "pde": []}
         self.iter = 0
 
     def predict(self, X):
@@ -230,7 +240,7 @@ class PINN:
         u, v = self.predict(X)[0:2]
 
         mse_bc = torch.mean(torch.square(u - U_inf*np.cos(AoA))) + torch.mean(
-            torch.square(v - U_inf*np.cos(AoA))
+            torch.square(v - U_inf*np.sin(AoA))
         )
 
         return mse_bc
@@ -282,7 +292,6 @@ class PINN:
         X = X.clone()
         #X.requires_grad = True
         pred_u, pred_v, pred_p = self.predict(X)
-        pred_u = pred_u.view(-1,1)
         
         loss_func = nn.MSELoss()
         u,v,p = actual[0], actual[1], actual[2]
@@ -295,6 +304,12 @@ class PINN:
         loss3 = loss_func(pred_p,p)    
 
         loss=loss1+loss2+loss3
+        '''
+        print('u loss',torch.mean(loss1))
+        print('v loss',torch.mean(loss2))
+        print('p loss',torch.mean(loss3))
+        print('total',loss)
+        '''
 
         return loss,loss1,loss2,loss3
 
@@ -304,61 +319,155 @@ class PINN:
         self.lbfgs.zero_grad()
         self.adam.zero_grad()
 
-        #mse_bc1 = self.bc_loss1(bc1)
-        #mse_bc2 = self.bc_loss2(t_airfoil_points,n_data)
-        #mse_pde = self.pde_loss(rand_points)
+        mse_bc1 = self.bc_loss1(bc1)
+        mse_bc2 = self.bc_loss2(t_airfoil_points,n_data)
+        mse_pde = self.pde_loss(rand_points)
 
-        loss, l1,l2,l3= self.mse_loss(xy_actual,uvp_act)
-        self.loss=loss
+        #loss, l1,l2,l3= self.mse_loss(xy_actual,uvp_act)
+        #self.loss=loss
+        #self.losses["l1"].append(l1.detach().cpu().item())
+        #self.losses["l2"].append(l2.detach().cpu().item())
+        #self.losses["l3"].append(l3.detach().cpu().item())
+
+        loss = mse_bc1 + mse_bc2 + mse_pde
+
         loss.backward()
-        self.losses["l1"].append(l1.detach().cpu().item())
-        self.losses["l2"].append(l2.detach().cpu().item())
-        self.losses["l3"].append(l3.detach().cpu().item())
 
-
-        #self.losses["bc1"].append(mse_bc1.detach().cpu().item())
-        #self.losses["bc2"].append(mse_bc2.detach().cpu().item())
-        #self.losses["pde"].append(mse_pde.detach().cpu().item())
+        self.losses["bc1"].append(mse_bc1.detach().cpu().item())
+        self.losses["bc2"].append(mse_bc2.detach().cpu().item())
+        self.losses["pde"].append(mse_pde.detach().cpu().item())
         
         self.iter +=  1
 
-        #if(self.iter%200 == 0):
-        #    print(f" It: {self.iter} Loss: {loss.item():.5e} BC1: {mse_bc1.item():.3e} BC2: {mse_bc2.item():.3e} pde: {mse_pde.item():.3e}"
-        #        )
+        if(self.iter%200 == 0):
+            print(f" It: {self.iter} Loss: {loss.item():.5e} BC1: {mse_bc1.item():.3e} BC2: {mse_bc2.item():.3e} pde: {mse_pde.item():.3e}"
+                )
 
-        if(self.iter%200==0):
-            print(self.iter,"loss:",loss," loss u:",l1," loss v:",l2," loss p:",l3)
+        #if(self.iter%200==0):
+         #   print(self.iter,"loss:",loss," loss u:",l1," loss v:",l2," loss p:",l3)
 
         return loss
     
-    def validate(self,actual):
+
+    def closure1(self):
+
+        self.lbfgs.zero_grad()
+        self.adam.zero_grad()
+
+        loss, l1,l2,l3= self.mse_loss(xy_actual,uvp_act)
+        self.loss=loss
+        self.losses["l1"].append(l1.detach().cpu().item())
+        self.losses["l2"].append(l2.detach().cpu().item())
+        self.losses["l3"].append(l3.detach().cpu().item())
+        loss.backward()
+        
+        self.iter +=  1
+
+        if(self.iter%200==0):
+           print(self.iter,"loss:",loss," loss u:",l1," loss v:",l2," loss p:",l3)
+
+        return loss
+    
+    def closure2(self):
+
+        self.lbfgs.zero_grad()
+        self.adam.zero_grad()
+
+        
+
+        mse_pde = self.pde_loss(rand_points)
+
+        loss = mse_pde
+
+        loss.backward()
+
+        self.losses["pde"].append(mse_pde.detach().cpu().item())
+        
+        self.iter +=  1
+
+        if(self.iter%200 == 0):
+            print(f" It: {self.iter} Loss: {loss.item():.5e} pde: {mse_pde.item():.3e}"
+                )
+
+
+        return loss
+
+    def closure3(self):
+
+        self.lbfgs.zero_grad()
+        self.adam.zero_grad()
+
+        mse_bc1 = self.bc_loss1(bc1)
+        mse_bc2 = self.bc_loss2(t_airfoil_points,n_data)
+
+        loss = mse_bc1 + mse_bc2
+
+        loss.backward()
+
+        self.losses["bc1"].append(mse_bc1.detach().cpu().item())
+        self.losses["bc2"].append(mse_bc2.detach().cpu().item())
+        
+        self.iter +=  1
+
+        if(self.iter%200 == 0):
+            print(f" It: {self.iter} Loss: {loss.item():.5e} BC1: {mse_bc1.item():.3e} BC2: {mse_bc2.item():.3e} "
+                )
+
+        
+
+        return loss
+
+    def validate(self,X,actual):
         #actual=actual[0:10][0:100]
-        xy,au,av,ap=CSV.tsplit_data(actual)
-        #X = xy.clone()
-        pred_u, pred_v, pred_p = self.predict(xy)
+        X = X.clone()
+        pred_u, pred_v, pred_p = self.predict(X)
         critereon=nn.MSELoss()
-        u=critereon(pred_u,au)
-        v=critereon(av,pred_v)
-        p=critereon(ap,pred_p)
-        loss=u+v+p
-        print('u loss',torch.mean(u))
-        print('v loss',torch.mean(v))
-        print('p loss',torch.mean(p))
+        u,v,p = actual[0], actual[1], actual[2]
+        u = u.view(-1,1)
+        v = v.view(-1,1)
+        p = p.view(-1,1)
+        ul=critereon(pred_u,u)
+        vl=critereon(pred_v,v)
+        pl=critereon(pred_p,p)
+        loss=ul+vl+pl
+        print('u loss',torch.mean(ul))
+        print('v loss',torch.mean(vl))
+        print('p loss',torch.mean(pl))
         print('total',loss)
         return
 
     
 if __name__  ==  "__main__":
     pinn = PINN()
-    while(pinn.iter<1000 or pinn.loss<1e-8):
-
-        pinn.closure()
+    for i in range(2000):
+        pinn.closure1()
         pinn.adam.step()
+    pinn.lbfgs.step(pinn.closure1)
+    torch.save(pinn.net.state_dict(), "c:/Users/DakotaBarnhardt/Downloads/Airfoils/Param1.pt")
+    plotLoss(pinn.losses, "c:/Users/DakotaBarnhardt/Downloads/Airfoils/LossCurve1.png", ["l1","l2","l3"])
 
-    pinn.lbfgs.step(pinn.closure)
+
+
+    for i in range(2000):
+        pinn.closure2()
+        pinn.adam.step()
+    pinn.lbfgs.step(pinn.closure2)
+    torch.save(pinn.net.state_dict(), "c:/Users/DakotaBarnhardt/Downloads/Airfoils/Param2.pt")
+    plotLoss(pinn.losses, "c:/Users/DakotaBarnhardt/Downloads/Airfoils/LossCurve2.png", ["PDE"])
+
+
+    for i in range(2000):
+        pinn.closure3()
+        pinn.adam.step()
+    pinn.lbfgs.step(pinn.closure3)
+    torch.save(pinn.net.state_dict(), "c:/Users/DakotaBarnhardt/Downloads/Airfoils/Param3.pt")
+    plotLoss(pinn.losses, "c:/Users/DakotaBarnhardt/Downloads/Airfoils/LossCurve3.png", ["BC1","BC2"])
+
+
+    pinn.mse_loss(xy_actual,uvp_act)
     torch.save(pinn.net.state_dict(), "c:/Users/DakotaBarnhardt/Downloads/Airfoils/Param.pt")
-    plotLoss(pinn.losses, "c:/Users/DakotaBarnhardt/Downloads/Airfoils/LossCurve.png", ["l1","l2","l3"])
-
+    plotLoss(pinn.losses, "c:/Users/DakotaBarnhardt/Downloads/Airfoils/LossCurve.png", ["BC1","BC2","PDE"])
+    
     
 
 

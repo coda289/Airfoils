@@ -27,8 +27,8 @@ def read_data(path):
         airfoil_points.append(point)
     return airfoil_points
 
-y_min = -1
-y_max = 1
+y_min = -.5
+y_max = .5
 x_min = -1
 x_max = 2
 airfoil_points= read_data('ah79100b.dat')
@@ -93,23 +93,9 @@ for i in range(3):
     ax.set_xlabel("x")
     ax.set_ylabel("y")
     ax.set_aspect("equal")
-plt.axis('equal')
-    
 
 fig.tight_layout()
 
 fig.savefig("c:/Users/DakotaBarnhardt/Downloads/Airfoils/Sol.png", dpi=500)
 
 
-
-'''
-import torch
-
-# Example tensors representing x and y components
-x = torch.tensor([3.0, 4.0])
-y = torch.tensor([4.0, 3.0])
-
-# Compute the magnitude (norm) of the vector
-magnitude = torch.sqrt(x**2 + y**2)
-print(magnitude)  # Output: tensor([5.0000, 5.0000])
-'''
