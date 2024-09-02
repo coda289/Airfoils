@@ -3,13 +3,14 @@ import numpy as np
 import torch
 import torch.nn as nn
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-from readcsv import CSV
+from read_data import CSV, DAT
 from shapely.geometry import Point
 from shapely.geometry.polygon import Polygon
 from torch.autograd import grad
 
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
+#not really neccesary 
 torch.manual_seed(1234)
 np.random.seed(1234)
 
@@ -31,26 +32,8 @@ validation_data = CSV.read_data('flow.csv')
 uvp_list, xy_actual = CSV.tsplit_data(validation_data)
 uvp_act = uvp_list[2:5]
 
-#Reads a '.dat' file of airfoil data
-def read_data(path):
-
-    with open(path,'r') as f:
-        fileLines = f.readlines()
-    fileLines.pop(0)
-
-    airfoilPoints = []
-    for line in fileLines:
-        point = line.split(' ')
-        while point.__contains__(''):
-            point.remove('')
-        point[0] = float(point[0])
-        point[1] = float(point[1][0:len(point[1])-2])
-        airfoilPoints.append(point)
-
-    return airfoilPoints
-
 #turns the data into an array
-airfoil_points = read_data(path_to_points)
+airfoil_points = DAT.read_data(path_to_points)
 
 #turns the array into a tensor
 t_airfoil_points = torch.tensor(
@@ -58,8 +41,8 @@ t_airfoil_points = torch.tensor(
 
 #returns the points from the boundry condition
 #returns random points for the network to use
-# (in the range but out of the airfoil)
-def make_graph(data):
+#(in the range but out of the airfoil)
+def make_graph(data, xs_min=-.2, xs_max=1.2, ys_min=-.5, ys_max=.5):
     #walls
     front_wally = torch.linspace(y_min, y_max, bound_num)
     front_wallx = torch.ones_like(front_wally)*x_min
@@ -76,9 +59,9 @@ def make_graph(data):
     c2 = torch.stack((top_wallx, top_wally), dim=1)
     c3 = torch.stack((bottom_wallx, bottom_wally), dim=1)
     bc1 = torch.concatenate([c1,c2,c3])
-    #bc1 = torch.concatenate([bc1,c3])
     bc1.clone().detach().requires_grad_(True)
-    #bc1 = torch.tensor(bc1,dtype=torch.float32, requires_grad=True)
+
+    #make random 
     x = []
     y = []
     xy = []
@@ -93,8 +76,8 @@ def make_graph(data):
             y.append(yp)
             xy.append([xp, yp])
     while len(xy)<points_num:
-        xp = np.random.uniform(-.2, 1.2)
-        yp = np.random.uniform(-.5, .5)
+        xp = np.random.uniform(xs_min,xs_max)
+        yp = np.random.uniform(ys_min, ys_max)
         point = Point(xp,yp)
         if not polygon.contains(point):
             x.append(xp)
@@ -137,8 +120,7 @@ def normal_data(data):
         else:
             next = None
         normals.append([normaly,normalx])
-    normals=np.array(normals)
-    normals=np.linalg.norm(normals,axis=1,keepdims=True)
+    normals=np.array(normals)  
     normals = torch.tensor(normals,requires_grad=True)
     return normals
 
@@ -201,7 +183,7 @@ class DNN(nn.Module):
 class PINN:
 
 #TODO change to represent real life
-    U_inf = 10
+    U_inf = 1
     rho = 1
     AoA = 0
     
@@ -215,7 +197,7 @@ class PINN:
             lr=1.0,
             max_iter=10000,
             max_eval=10000,
-            tolerance_grad=1e-5,
+            tolerance_grad=1e-8,
             tolerance_change=1.0 * np.finfo(float).eps,
             history_size=50,
             line_search_fn="strong_wolfe",
@@ -223,8 +205,8 @@ class PINN:
 
         self.adam = torch.optim.Adam(self.net.parameters(), lr=5e-4)
         #self.losses = {"l1": [], "l2": [], "l3": []}
-        self.losses = {"bc1": [], "bc2": [], "pde": [],"l1": [], "l2": [], "l3": []}
-        #self.losses = {"bc1": [], "bc2": [], "pde": []}
+        #self.losses = {"bc1": [], "bc2": [], "pde": [],"l1": [], "l2": [], "l3": []}
+        self.losses = {"bc1": [], "bc2": [], "pde": []}
         self.iter = 0
 
     def predict(self, X):
@@ -236,9 +218,9 @@ class PINN:
 
         return u, v, p
     
-    def bc_loss1(self, X,U_inf=10,AoA=0):
+    def bc_loss1(self, X,U_inf=U_inf,AoA=AoA):
         u, v = self.predict(X)[0:2]
-
+        
         mse_bc = torch.mean(torch.square(u - U_inf*np.cos(AoA))) + torch.mean(
             torch.square(v - U_inf*np.sin(AoA))
         )
@@ -256,17 +238,16 @@ class PINN:
         )
         return mse_bc
     
-    def pde_loss(self, X,rho=1):
+    def pde_loss(self, X,rho=rho):
         X = X.clone()
         X.requires_grad = True
 
         u, v, p = self.predict(X)
-
+        
         du_out = grad(u.sum(), X, create_graph=True)[0]
         dv_out = grad(v.sum(), X, create_graph=True)[0]
         dp_out = grad(p.sum(), X, create_graph=True)[0]
 
-        
         dudx = du_out[:, 0:1]
         dudy = du_out[:, 1:2]
         dvdx = dv_out[:, 0:1]
@@ -304,12 +285,12 @@ class PINN:
         loss3 = loss_func(pred_p,p)    
 
         loss=loss1+loss2+loss3
-        '''
+        
         print('u loss',torch.mean(loss1))
         print('v loss',torch.mean(loss2))
         print('p loss',torch.mean(loss3))
         print('total',loss)
-        '''
+        
 
         return loss,loss1,loss2,loss3
 
@@ -364,8 +345,8 @@ class PINN:
         self.iter +=  1
 
         if(self.iter%200==0):
-           print(self.iter,"loss:",loss," loss u:",l1," loss v:",l2," loss p:",l3)
-
+            print(self.iter,"loss:",loss," loss u:",l1," loss v:",l2," loss p:",l3)
+            print(pinn.pde_loss(xy_actual))
         return loss
     
     def closure2(self):
@@ -437,6 +418,20 @@ class PINN:
         return
 
     
+
+if __name__  ==  "__main__":
+    pinn = PINN()
+    for i in range(3000):
+        pinn.closure()
+        pinn.adam.step()
+    pinn.lbfgs.step(pinn.closure)
+    pinn.mse_loss(xy_actual,uvp_act)
+    torch.save(pinn.net.state_dict(), "c:/Users/DakotaBarnhardt/Downloads/Airfoils/Param.pt")
+    plotLoss(pinn.losses, "c:/Users/DakotaBarnhardt/Downloads/Airfoils/LossCurve.png", ["BC1","BC2","PDE"])
+    
+
+'''
+test
 if __name__  ==  "__main__":
     pinn = PINN()
     for i in range(2000):
@@ -467,7 +462,7 @@ if __name__  ==  "__main__":
     pinn.mse_loss(xy_actual,uvp_act)
     torch.save(pinn.net.state_dict(), "c:/Users/DakotaBarnhardt/Downloads/Airfoils/Param.pt")
     plotLoss(pinn.losses, "c:/Users/DakotaBarnhardt/Downloads/Airfoils/LossCurve.png", ["BC1","BC2","PDE"])
-    
+'''
     
 
 

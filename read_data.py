@@ -42,6 +42,23 @@ class CSV():
         #uvp = torch.tensor(uvp,dtype=torch.float32,requires_grad=True)
         return [x,y,u,v,p],xy
 
+class DAT():
+    def read_data(path):
+
+        with open(path,'r') as f:
+            fileLines = f.readlines()
+        fileLines.pop(0)
+
+        airfoilPoints = []
+        for line in fileLines:
+            point = line.split(' ')
+            while point.__contains__(''):
+                point.remove('')
+            point[0] = float(point[0])
+            point[1] = float(point[1][0:len(point[1])-2])
+            airfoilPoints.append(point)
+
+        return airfoilPoints
 '''
 data=CSV.read_data('flow.csv',2.0,-1.0,1.0,-1.0)
 list,xy,uvp=CSV.tsplit_data(data)

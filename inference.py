@@ -6,32 +6,15 @@ from training import PINN
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from shapely.geometry import Point
 from shapely.geometry.polygon import Polygon
+from read_data import CSV, DAT
 
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-
-#reads the airfoil data 
-# given as a path to a .dat file
-def read_data(path):
-
-    with open(path,'r') as f:
-        file_lines = f.readlines()
-    file_lines.pop(0)
-    airfoil_points=[]
-
-    for line in file_lines:
-        point = line.split(' ')
-        while point.__contains__(''):
-            point.remove('')
-        point[0] = float(point[0])
-        point[1] = float(point[1][0:len(point[1])-2])
-        airfoil_points.append(point)
-    return airfoil_points
 
 y_min = -.5
 y_max = .5
 x_min = -1
 x_max = 2
-airfoil_points= read_data('ah79100b.dat')
+airfoil_points= DAT.read_data('ah79100b.dat')
 
 pinn = PINN()
 
@@ -77,14 +60,11 @@ with torch.no_grad():
 fig, axes = plt.subplots(3, 1, figsize=(11, 12), sharex=True)
 data = (u, v, p)
 labels = ["u(x,y)","v(x,y)", "p(x,y)"]
-polygon = patches.Polygon(airfoil_points, closed=True, fill=True, edgecolor='w', facecolor='w', alpha=0.5)
 for i in range(3):
     ax = axes[i]
-    #polygon = patches.Polygon(airfoil_points, closed=True, fill=True, edgecolor='w', facecolor='w', alpha=0.5)
-    #ax.add_patch(polygon)
     im = ax.imshow(
         data[i], cmap="rainbow", 
-        extent=[x_min, x_max, y_min, y_max], origin="lower"
+        extent=[x_min, x_max, y_min, y_max]
     )
     divider = make_axes_locatable(ax)
     cax = divider.append_axes("right", size="3%", pad="3%")
