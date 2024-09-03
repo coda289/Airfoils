@@ -21,9 +21,9 @@ x_min = -50
 x_max = 50
 
 #Amount of points taken along boundry condition
-bound_num = 60
+bound_num = 50
 #Amount of points to evaluate each step
-points_num = 2000
+points_num = 1000
 
 #path to airfoil data
 path_to_points = 'ah79100b.dat'
@@ -119,7 +119,8 @@ def normal_data(data):
             next = data[i+2]
         else:
             next = None
-        normals.append([normaly,normalx])
+        length=np.sqrt(normalx**2+normaly**2)
+        normals.append([normaly/length,normalx/length])
     normals=np.array(normals)  
     normals = torch.tensor(normals,requires_grad=True)
     return normals
@@ -183,7 +184,7 @@ class DNN(nn.Module):
 class PINN:
 
 #TODO change to represent real life
-    U_inf = 1
+    U_inf = 1 
     rho = 1
     AoA = 0
     
@@ -197,8 +198,8 @@ class PINN:
             lr=1.0,
             max_iter=10000,
             max_eval=10000,
-            tolerance_grad=1e-8,
-            tolerance_change=1.0 * np.finfo(float).eps,
+            tolerance_grad=1e-5,
+            tolerance_change=1e-7,#1.0 * np.finfo(float).eps,
             history_size=50,
             line_search_fn="strong_wolfe",
         )
@@ -206,7 +207,8 @@ class PINN:
         self.adam = torch.optim.Adam(self.net.parameters(), lr=5e-4)
         #self.losses = {"l1": [], "l2": [], "l3": []}
         #self.losses = {"bc1": [], "bc2": [], "pde": [],"l1": [], "l2": [], "l3": []}
-        self.losses = {"bc1": [], "bc2": [], "pde": []}
+        self.losses = {"bc1": [], "bc2": [], "pde": [],"mse":[]}
+        self.lw = [1,1,1.5]
         self.iter = 0
 
     def predict(self, X):
@@ -285,14 +287,14 @@ class PINN:
         loss3 = loss_func(pred_p,p)    
 
         loss=loss1+loss2+loss3
-        
+        '''
         print('u loss',torch.mean(loss1))
         print('v loss',torch.mean(loss2))
         print('p loss',torch.mean(loss3))
         print('total',loss)
-        
+        '''
 
-        return loss,loss1,loss2,loss3
+        return loss
 
 
     def closure(self):
@@ -304,13 +306,13 @@ class PINN:
         mse_bc2 = self.bc_loss2(t_airfoil_points,n_data)
         mse_pde = self.pde_loss(rand_points)
 
-        #loss, l1,l2,l3= self.mse_loss(xy_actual,uvp_act)
+        mse_loss= self.mse_loss(xy_actual,uvp_act)
         #self.loss=loss
         #self.losses["l1"].append(l1.detach().cpu().item())
         #self.losses["l2"].append(l2.detach().cpu().item())
         #self.losses["l3"].append(l3.detach().cpu().item())
 
-        loss = mse_bc1 + mse_bc2 + mse_pde
+        loss = mse_bc1 + mse_bc2 + mse_pde+mse_loss
 
         loss.backward()
 
@@ -321,11 +323,11 @@ class PINN:
         self.iter +=  1
 
         if(self.iter%200 == 0):
-            print(f" It: {self.iter} Loss: {loss.item():.5e} BC1: {mse_bc1.item():.3e} BC2: {mse_bc2.item():.3e} pde: {mse_pde.item():.3e}"
+            print(f" It: {self.iter} Loss: {loss.item():.5e} BC1: {mse_bc1.item():.3e} BC2: {mse_bc2.item():.3e} pde: {mse_pde.item():.3e} mse: {mse_loss}"
                 )
 
         #if(self.iter%200==0):
-         #   print(self.iter,"loss:",loss," loss u:",l1," loss v:",l2," loss p:",l3)
+        #   print(self.iter,"loss:",loss," loss u:",l1," loss v:",l2," loss p:",l3)
 
         return loss
     
@@ -399,23 +401,29 @@ class PINN:
         return loss
 
     def validate(self,X,actual):
-        #actual=actual[0:10][0:100]
         X = X.clone()
+        #X.requires_grad = True
         pred_u, pred_v, pred_p = self.predict(X)
-        critereon=nn.MSELoss()
+        
+        loss_func = nn.MSELoss()
         u,v,p = actual[0], actual[1], actual[2]
         u = u.view(-1,1)
         v = v.view(-1,1)
         p = p.view(-1,1)
-        ul=critereon(pred_u,u)
-        vl=critereon(pred_v,v)
-        pl=critereon(pred_p,p)
-        loss=ul+vl+pl
-        print('u loss',torch.mean(ul))
-        print('v loss',torch.mean(vl))
-        print('p loss',torch.mean(pl))
+
+        loss1 = loss_func(pred_u*100,u)
+        loss2 = loss_func(pred_v*100,v)
+        loss3 = loss_func(pred_p*100,p)    
+
+        loss=loss1+loss2+loss3
+        
+        print('u loss',torch.mean(loss1))
+        print('v loss',torch.mean(loss2))
+        print('p loss',torch.mean(loss3))
         print('total',loss)
-        return
+        
+
+        return loss,loss1,loss2,loss3
 
     
 
@@ -424,20 +432,19 @@ if __name__  ==  "__main__":
     for i in range(3000):
         pinn.closure()
         pinn.adam.step()
-    pinn.lbfgs.step(pinn.closure)
+    #pinn.lbfgs.step(pinn.closure)
     pinn.mse_loss(xy_actual,uvp_act)
     torch.save(pinn.net.state_dict(), "c:/Users/DakotaBarnhardt/Downloads/Airfoils/Param.pt")
     plotLoss(pinn.losses, "c:/Users/DakotaBarnhardt/Downloads/Airfoils/LossCurve.png", ["BC1","BC2","PDE"])
-    
+
 
 '''
-test
 if __name__  ==  "__main__":
     pinn = PINN()
-    for i in range(2000):
+    for i in range(3000):
         pinn.closure1()
         pinn.adam.step()
-    pinn.lbfgs.step(pinn.closure1)
+    #pinn.lbfgs.step(pinn.closure1)
     torch.save(pinn.net.state_dict(), "c:/Users/DakotaBarnhardt/Downloads/Airfoils/Param1.pt")
     plotLoss(pinn.losses, "c:/Users/DakotaBarnhardt/Downloads/Airfoils/LossCurve1.png", ["l1","l2","l3"])
 

@@ -22,6 +22,20 @@ class CSV():
 
         return data
     
+    def check(path):
+        with open(path,'r') as f:
+            fileLines = f.readlines()
+        label=fileLines[0].split(',')
+        fileLines.pop(0)
+        data=[[],[],[],[],[],[],[],[],[]]
+        for line in fileLines:
+            point=line.split(',')
+            point[len(point)-1]= point[len(point)-1][0:len(point[1])-2]
+            for i in range(len(point)):
+                point[i]=float(point[i])
+            if -50<point[6] and point[6]<49:
+                print('u:',point[1],'v:',point[2])
+    
     def tsplit_data(data):
         p=data[0]
         u=data[1]
@@ -59,6 +73,8 @@ class DAT():
             airfoilPoints.append(point)
 
         return airfoilPoints
+    
+
 '''
 data=CSV.read_data('flow.csv',2.0,-1.0,1.0,-1.0)
 list,xy,uvp=CSV.tsplit_data(data)

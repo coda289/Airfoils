@@ -6,7 +6,7 @@ from training import PINN
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from shapely.geometry import Point
 from shapely.geometry.polygon import Polygon
-from read_data import CSV, DAT
+from read_data import DAT
 
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
@@ -64,7 +64,7 @@ for i in range(3):
     ax = axes[i]
     im = ax.imshow(
         data[i], cmap="rainbow", 
-        extent=[x_min, x_max, y_min, y_max]
+        extent=[x_min, x_max, y_min, y_max],origin='lower'
     )
     divider = make_axes_locatable(ax)
     cax = divider.append_axes("right", size="3%", pad="3%")

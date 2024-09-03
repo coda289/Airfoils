@@ -175,11 +175,11 @@ polygon_vertices = read_data('ah79100b.dat')
 polygon = patches.Polygon(polygon_vertices, closed=True, fill=True, edgecolor='r', facecolor='g', alpha=0.5)
 
 # Add the polygon to the first subplot
-axes[0].add_patch(polygon)
+plt.add_patch(polygon)
 
 # Set limits for the axes
-axes[0].set_xlim(0, 1)
-axes[0].set_ylim(-.1, 1)
+plt.set_xlim(0, 1)
+plt.set_ylim(-.1, 1)
 
 # Display the plot
 plt.show()
