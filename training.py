@@ -294,7 +294,7 @@ class PINN:
         mse_pde = self.pde_loss(rand_points)
         mse_out = self.out_loss(outlet)
 
-        loss = mse_bc1*5 + mse_bc2*5 + mse_pde*3+ mse_out*.5
+        loss = mse_bc1*5 + mse_bc2*5 + mse_pde*2+ mse_out
 
         loss.backward()
 

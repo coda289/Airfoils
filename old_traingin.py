@@ -342,7 +342,7 @@ class PINN:
         self.iter +=  1
 
         if(self.iter%200 == 0):
-            print(f" It: {self.iter} Loss: {loss.item():.5e} BC1: {mse_bc1.item():.3e} BC2: {mse_bc2.item():.3e} pde: {mse_pde.item():.3e}"
+            print(f" It: {self.iter} Loss: {loss.item():.4e} BC1: {mse_bc1.item():.3e} BC2: {mse_bc2.item():.3e} pde: {mse_pde.item():.3e}"
                 )
 
         #if(self.iter%200==0):
