@@ -100,4 +100,4 @@ def infer(change=False):
     fig.savefig("c:/Users/DakotaBarnhardt/Downloads/Airfoils/Sol.png", dpi=500)
 
 if __name__ == "__main__":
-    infer(change=True)
+    infer()

@@ -9,8 +9,6 @@ from shapely.geometry.polygon import Polygon
 from torch.autograd import grad
 
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-
-#not really neccesary 
 torch.manual_seed(1234)
 np.random.seed(1234)
 
@@ -20,14 +18,14 @@ y_max = .5
 x_min = -1
 x_max = 2
 
-Re = 200
-mu = 0.02
-rho = 1
+Re = 2000
+mu = 0.0000181206
+rho = 1.22500
 
 #Amount of points taken along boundry condition
-bound_num = 100
+bound_num = 50
 #Amount of points to evaluate each step
-points_num = 2000
+points_num = 1000
 
 #path to airfoil data
 path_to_points = 'ah79100b.dat'
@@ -65,6 +63,9 @@ def make_graph(data):
     inlet = torch.stack((front_wallx, front_wally), dim=1)
     c2 = torch.stack((top_wallx, top_wally), dim=1)
     c3 = torch.stack((bottom_wallx, bottom_wally), dim=1)
+    #if top and bottom u=uinf
+    #bc1 = torch.concatenate([inlet,c2,c3])
+    #if top and bottom walls =0
     bc1 = torch.concatenate([c2,c3])
     bc1.clone().detach().requires_grad_(True)
 
@@ -153,8 +154,7 @@ class DNN(nn.Module):
 class PINN:
 
 #TODO change to represent real life
-    U_inf = 1
-    rho = 1
+    U_inf =1# Re*mu/rho
     AoA = 0
     
     def __init__(self) -> None:
@@ -289,12 +289,16 @@ class PINN:
         self.lbfgs.zero_grad()
         self.adam.zero_grad()
 
+        #if top and bottom walls u=u_inf
+        #mse_bc1 = self.bc_loss1(bc1)
+        #mse_bc2 = self.bc_loss2(t_airfoil_points)
+        #if top and bottom walls =0
         mse_bc1 = self.bc_loss1(inlet)
-        mse_bc2 = self.bc_loss2(torch.cat([t_airfoil_points,bc1]))
+        mse_bc2 = self.bc_loss2(torch.cat([bc1,t_airfoil_points]))
         mse_pde = self.pde_loss(rand_points)
         mse_out = self.out_loss(outlet)
 
-        loss = mse_bc1*5 + mse_bc2*5 + mse_pde*2+ mse_out
+        loss = mse_bc1*50 + mse_bc2*50 + mse_pde+ mse_out
 
         loss.backward()
 
@@ -316,7 +320,7 @@ class PINN:
 
 if __name__  ==  "__main__":
     pinn = PINN()
-    for i in range(3000):
+    for i in range(2000):
         pinn.closure()
         pinn.adam.step()
     pinn.lbfgs.step(pinn.closure)

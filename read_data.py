@@ -73,4 +73,3 @@ class DAT():
             airfoilPoints.append(point)
 
         return airfoilPoints
-    
