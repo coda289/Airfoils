@@ -16,7 +16,7 @@ y_max = .5
 x_min = -1
 x_max = 2
 
-def points(path = 'ah79100b.dat', step_size = .01):
+def points(path = 'ah79100b.dat', step_size = .005):
    
     airfoil_points= DAT.read_data(path)
 
