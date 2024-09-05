@@ -320,6 +320,6 @@ if __name__  ==  "__main__":
         pinn.closure()
         pinn.adam.step()
     pinn.lbfgs.step(pinn.closure)
-    #pinn.mse_loss(xy_actual,uvp_act)
+    pinn.mse_loss(xy_actual,uvp_act)
     torch.save(pinn.net.state_dict(), "c:/Users/DakotaBarnhardt/Downloads/Airfoils/Param.pt")
     plotLoss(pinn.losses, "c:/Users/DakotaBarnhardt/Downloads/Airfoils/LossCurve.png", ["BC1","BC2","OUT","PDE"])
