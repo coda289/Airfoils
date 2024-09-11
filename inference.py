@@ -9,7 +9,7 @@ from shapely.geometry import Point
 from shapely.geometry.polygon import Polygon
 from read_data import DAT
 
-
+#set device and min and max
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 y_min = -.5
 y_max = .5
@@ -17,6 +17,8 @@ x_min = -1
 x_max = 2
 
 def points(path = 'ah79100b.dat', step_size = .005):
+    #creates the xy input 
+    #saves so it only has to be done once
    
     airfoil_points= DAT.read_data(path)
 
@@ -48,6 +50,8 @@ def points(path = 'ah79100b.dat', step_size = .005):
         pickle.dump(Y,file,protocol=None,fix_imports=True)
     
 def infer(change=False):
+    #creates the graph using the points
+    #if no points saved it generates them
 
     try:
         open('xy.txt') 
@@ -65,7 +69,7 @@ def infer(change=False):
     pinn = PINN()
 
     pinn.net.load_state_dict(torch.load(
-        "c:/Users/DakotaBarnhardt/Downloads/Airfoils/Param.pt"))
+        "Param.pt"))
 
     with torch.no_grad():
         u, v, p,s1,s2,s3 = pinn.predict(xy)
@@ -97,7 +101,7 @@ def infer(change=False):
         ax.set_aspect("equal")
 
     fig.tight_layout()
-    fig.savefig("c:/Users/DakotaBarnhardt/Downloads/Airfoils/Sol.png", dpi=500)
+    fig.savefig("Sol.png", dpi=500)
 
 if __name__ == "__main__":
     infer()

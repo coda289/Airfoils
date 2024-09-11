@@ -8,6 +8,7 @@ from shapely.geometry import Point
 from shapely.geometry.polygon import Polygon
 from torch.autograd import grad
 
+#set seed and device 
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 torch.manual_seed(1234)
 np.random.seed(1234)
@@ -18,36 +19,38 @@ y_max = .6
 x_min = -1.1
 x_max = 2.1
 
+#constants
 Re = 2000
 mu = 0.0000181206
 rho = 1.22500
 
 #Amount of points taken along boundry condition
 bound_num = 100
-#Amount of points to evaluate each step
+#Amount of points to evaluate for PDE
 points_num = 3000
 
-#path to airfoil data
+#path DAT and CSV files
 path_to_points = 'ah79100b.dat'
+csv_file = 'flow.csv'
 
-validation_data = CSV.read_data('flow.csv')
+#reads and returns tensors for CVS
+validation_data = CSV.read_data(csv_file)
 uvp_list, xy_actual = CSV.tsplit_data(validation_data)
 uvp_act = uvp_list[2:5]
 
-#turns the data into an array
+#turns the data into an array and plots
 airfoil_points = DAT.read_data(path_to_points)
 for p in airfoil_points:
     plt.scatter(p[0],p[1],marker='o')
-
 
 #turns the array into a tensor
 t_airfoil_points = torch.tensor(
     airfoil_points,dtype=torch.float32,requires_grad=True)
 
-#returns the points from the boundry condition
-#returns random points for the network to use
-#(in the range but out of the airfoil)
 def make_graph(data):
+    #returns points for boundry
+    #return random points outside the airfoil
+
     #walls
     front_wally = torch.linspace(y_min, y_max, bound_num)
     front_wallx = torch.ones_like(front_wally)*x_min
@@ -60,6 +63,8 @@ def make_graph(data):
     plt.scatter(front_wallx, front_wally, marker='o')
     plt.scatter(top_wallx, top_wally, marker='o')
     plt.scatter(bottom_wallx, bottom_wally, marker='o')
+
+    #boundary conditions
     inlet = torch.stack((front_wallx, front_wally), dim=1)
     c2 = torch.stack((top_wallx, top_wally), dim=1)
     c3 = torch.stack((bottom_wallx, bottom_wally), dim=1)
@@ -92,13 +97,14 @@ def make_graph(data):
     rand_points = torch.tensor(xy,dtype=torch.float32)
     plt.scatter(x,y,marker='o',c='red')
 
+    #return tensors
     return bc1,rand_points,outlet,inlet
 
+#generated points
 bc1,rand_points,outlet,inlet = make_graph(airfoil_points)
 
-
-#plots the loss
 def plotLoss(losses_dict, path, info=["I.C.", "B.C.", "OUT","P.D.E."]):
+    #plots the loss
     fig, axes = plt.subplots(1, 4, sharex=True, sharey=True, figsize=(10, 6))
     axes[0].set_yscale("log")
     for i, j in zip(range(4), info):
@@ -107,34 +113,36 @@ def plotLoss(losses_dict, path, info=["I.C.", "B.C.", "OUT","P.D.E."]):
     plt.show()
     fig.savefig(path)
 
-#initalizes the weights
+
 def weights_init(m):
+    #initalizes the weights as random
+    #initalize bias as 0
     if isinstance(m, nn.Linear):
         torch.nn.init.xavier_uniform_(m.weight.data)
         torch.nn.init.zeros_(m.bias.data)
 
-
-#layer class
 class layer(nn.Module):
+    #layer class
 
-    #layer initialize
     def __init__(self, n_in, n_out, activation):
+        #layer initialize
         super().__init__()
         self.layer = nn.Linear(n_in, n_out)
         self.activation = activation
-
-    #forward pass
+    
     def forward(self, x):
+        #forward pass
         x = self.layer(x)
         if self.activation:
             x = self.activation(x)
         return x
 
-#Model class
-class DNN(nn.Module):
 
-    #initilize
+class DNN(nn.Module):
+    #Model class
+    
     def __init__(self, dim_in, dim_out, n_layer, n_node, activation=nn.Tanh()):
+        #initilize
         super().__init__()
         self.net = nn.ModuleList()
         self.net.append(layer(dim_in, n_node, activation))
@@ -143,21 +151,23 @@ class DNN(nn.Module):
         self.net.append(layer(n_node, dim_out, activation=None))
         self.net.apply(weights_init)
 
-    #forward pass
     def forward(self, x):
+        #forward pass
         out = x
         for layer in self.net:
             out = layer(out)
         return out
 
-#
-class PINN:
 
-#TODO change to represent real life
+class PINN:
+    #physics model 
+
+    #constants 
     U_inf =1# Re*mu/rho
     AoA = 0
     
     def __init__(self) -> None:
+        #intialize NN, optimizer, loss, and iteration
         self.net = DNN(dim_in=2, dim_out=6, n_layer=10, n_node=128).to(
             device
         )
@@ -178,6 +188,8 @@ class PINN:
         self.iter = 0
 
     def predict(self, X):
+        #predicts the output
+
         out = self.net(X)
 
         u = out[:, 0:1]
@@ -191,14 +203,18 @@ class PINN:
         return u, v, p, sig_xx, sig_xy, sig_yy
     
     def out_loss(self,X):
+        #outlet loss
+        #presure = 0 at the right wall
+
         p = self.predict(X)[2]
 
         mse_outlet = torch.mean(torch.square(p))
 
         return mse_outlet
 
-
     def bc_loss1(self, X,U_inf=U_inf,AoA=AoA):
+        #inlet loss at left wall
+        #u=u_inf v=0 
         u, v = self.predict(X)[0:2]
         
         mse_bc = torch.mean(torch.square(u - U_inf*np.cos(AoA))) + torch.mean(
@@ -208,13 +224,16 @@ class PINN:
         return mse_bc
     
     def bc_loss2(self,X):
+        #loss at top and bottom wall and airfoil
+        #(u,v)=(0,0)
         u,v = self.predict(X)[0:2]
         
-        mse_bc = torch.mean(torch.square(u)+torch.square(v))
+        mse_bc = torch.mean(torch.square(u) + torch.square(v))
 
         return mse_bc
     
     def pde_loss(self, X):
+        #physics loss based on Navier stokes
         X = X.clone()
         X.requires_grad = True
 
@@ -231,7 +250,6 @@ class PINN:
         u_y = u_out[:, 1:2]
         v_x = v_out[:, 0:1]
         v_y = v_out[:, 1:2]
-        #v_t = u_out[:, 2:3]
 
         sig_11_x = sig_11_out[:, 0:1]
         sig_12_x = sig_12_out[:, 0:1]
@@ -259,8 +277,10 @@ class PINN:
         return mse_pde
     
     def mse_loss(self, X, actual):
+        #mean squared error
+        #predicted-actual
+
         X = X.clone()
-        #X.requires_grad = True
         pred_u, pred_v, pred_p,s1,s2,s3 = self.predict(X)
         
         loss_func = nn.MSELoss()
@@ -280,11 +300,10 @@ class PINN:
         print('p loss',torch.mean(loss3))
         print('total',loss)
         
-
         return loss
 
-
     def closure(self):
+        #to run in the training loop
 
         self.lbfgs.zero_grad()
         self.adam.zero_grad()
@@ -302,6 +321,7 @@ class PINN:
 
         loss.backward()
 
+        #save loss
         self.losses["bc1"].append(mse_bc1.detach().cpu().item())
         self.losses["bc2"].append(mse_bc2.detach().cpu().item())
         self.losses["out"].append(mse_bc2.detach().cpu().item())
@@ -325,5 +345,5 @@ if __name__  ==  "__main__":
         pinn.adam.step()
     pinn.lbfgs.step(pinn.closure)
     pinn.mse_loss(xy_actual,uvp_act)
-    torch.save(pinn.net.state_dict(), "c:/Users/DakotaBarnhardt/Downloads/Airfoils/Param.pt")
-    plotLoss(pinn.losses, "c:/Users/DakotaBarnhardt/Downloads/Airfoils/LossCurve.png", ["BC1","BC2","OUT","PDE"])
+    torch.save(pinn.net.state_dict(), "Param.pt")
+    plotLoss(pinn.losses, "LossCurve.png", ["BC1","BC2","OUT","PDE"])
