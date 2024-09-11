@@ -13,19 +13,19 @@ torch.manual_seed(1234)
 np.random.seed(1234)
 
 #The min and max values of x and y
-y_min = -.5
-y_max = .5
-x_min = -1
-x_max = 2
+y_min = -.6
+y_max = .6
+x_min = -1.1
+x_max = 2.1
 
 Re = 2000
 mu = 0.0000181206
 rho = 1.22500
 
 #Amount of points taken along boundry condition
-bound_num = 50
+bound_num = 100
 #Amount of points to evaluate each step
-points_num = 1000
+points_num = 3000
 
 #path to airfoil data
 path_to_points = 'ah79100b.dat'
@@ -175,7 +175,6 @@ class PINN:
 
         self.adam = torch.optim.Adam(self.net.parameters(), lr=5e-4)
         self.losses = {"bc1": [], "bc2": [], "out": [],"pde":[]}
-        self.lw = [1,1,1.5]
         self.iter = 0
 
     def predict(self, X):
@@ -184,10 +183,11 @@ class PINN:
         u = out[:, 0:1]
         v = out[:, 1:2]
         p = out[:, 2:3]
+        
         sig_xx = out[:, 3:4]
         sig_xy = out[:, 4:5]
         sig_yy = out[:, 5:6]
-
+        
         return u, v, p, sig_xx, sig_xy, sig_yy
     
     def out_loss(self,X):
@@ -298,7 +298,7 @@ class PINN:
         mse_pde = self.pde_loss(rand_points)
         mse_out = self.out_loss(outlet)
 
-        loss = mse_bc1*50 + mse_bc2*50 + mse_pde+ mse_out
+        loss = mse_bc1*10 + mse_bc2*10 + mse_pde+ mse_out
 
         loss.backward()
 
@@ -320,7 +320,7 @@ class PINN:
 
 if __name__  ==  "__main__":
     pinn = PINN()
-    for i in range(2000):
+    for i in range(3000):
         pinn.closure()
         pinn.adam.step()
     pinn.lbfgs.step(pinn.closure)
