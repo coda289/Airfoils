@@ -3,7 +3,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-from read_data import CSV, DAT
+from read_data import CSV, DAT, VTU
 from shapely.geometry import Point
 from shapely.geometry.polygon import Polygon
 from torch.autograd import grad
@@ -31,12 +31,15 @@ points_num = 3000
 
 #path DAT and CSV files
 path_to_points = 'ah79100b.dat'
-csv_file = 'flow.csv'
+path_to_actual = 'flow.csv'
 
 #reads and returns tensors for CVS
-validation_data = CSV.read_data(csv_file)
-uvp_list, xy_actual = CSV.tsplit_data(validation_data)
-uvp_act = uvp_list[2:5]
+if('csv' in path_to_actual):
+    validation_data = CSV.read_data(path_to_actual)
+    uvp_list, xy_actual = CSV.tsplit_data(validation_data)
+    uvp_act = uvp_list[2:5]
+elif('vtu' in path_to_actual):
+    xy_actual,uvp_act = VTU.read_data(path_to_actual)
 
 #turns the data into an array and plots
 airfoil_points = DAT.read_data(path_to_points)
@@ -199,7 +202,7 @@ class PINN:
         sig_xx = out[:, 3:4]
         sig_xy = out[:, 4:5]
         sig_yy = out[:, 5:6]
-        
+    
         return u, v, p, sig_xx, sig_xy, sig_yy
     
     def out_loss(self,X):
@@ -281,7 +284,8 @@ class PINN:
         #predicted-actual
 
         X = X.clone()
-        pred_u, pred_v, pred_p,s1,s2,s3 = self.predict(X)
+        #pred_u, pred_v, pred_p,s1,s2,s3 = self.predict(X)
+        pred_u, pred_v, pred_p = self.predict(X)
         
         loss_func = nn.MSELoss()
         u,v,p = actual[0], actual[1], actual[2]
@@ -300,7 +304,7 @@ class PINN:
         print('p loss',torch.mean(loss3))
         print('total',loss)
         
-        return loss
+        return loss,loss1,loss2,loss3
 
     def closure(self):
         #to run in the training loop
@@ -324,7 +328,7 @@ class PINN:
         #save loss
         self.losses["bc1"].append(mse_bc1.detach().cpu().item())
         self.losses["bc2"].append(mse_bc2.detach().cpu().item())
-        self.losses["out"].append(mse_bc2.detach().cpu().item())
+        self.losses["out"].append(mse_out.detach().cpu().item())
         self.losses["pde"].append(mse_pde.detach().cpu().item())
         
         self.iter +=  1
@@ -335,6 +339,26 @@ class PINN:
 
         return loss
     
+    def closureMSE(self):
+        #to run in the training loop
+
+        self.lbfgs.zero_grad()
+        self.adam.zero_grad()
+
+        loss,l1,l2,l3=self.mse_loss(xy_actual,uvp_act)
+
+        loss.backward()
+        self.losses["bc1"].append(l1.detach().cpu().item())
+        self.losses["bc2"].append(l2.detach().cpu().item())
+        self.losses["out"].append(l3.detach().cpu().item())
+        
+        self.iter +=  1
+
+        if(self.iter%200 == 0):
+            print(f" It: {self.iter} Loss: {loss.item():.5e}"
+                )
+
+        return loss
 
     
 

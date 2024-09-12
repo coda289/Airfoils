@@ -72,8 +72,8 @@ def infer(change=False):
         "Param.pt"))
 
     with torch.no_grad():
-        u, v, p,s1,s2,s3 = pinn.predict(xy)
-    
+        #u, v, p,s1,s2,s3 = pinn.predict(xy)
+        u, v, p = pinn.predict(xy)
         u = u.cpu().numpy()
         u = u.reshape(Y.shape)
 

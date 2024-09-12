@@ -1,4 +1,5 @@
 import torch
+import vtk
 
 class CSV():
     #to interpret csv data 
@@ -60,3 +61,54 @@ class DAT():
             airfoilPoints.append(point)
 
         return airfoilPoints
+
+class VTU():
+
+    def read_data(path):
+        reader = vtk.vtkXMLUnstructuredGridReader()
+        reader.SetFileName("flow.vtu")
+        reader.Update()
+
+        # Get the data from the reader
+        data = reader.GetOutput()
+
+        points = data.GetPoints()
+        num_points = points.GetNumberOfPoints()
+
+        pressure = data.GetPointData().GetArray("Pressure")
+
+        velocity = data.GetPointData().GetArray("Velocity")
+        points_array=[]
+        pressure_array=[]
+        velocity_array=[]
+        for i in range(num_points):
+            points_array.append(list(points.GetPoint(i)))
+            pressure_array.append(pressure.GetValue(i))
+            velocity_array.append(list(velocity.GetTuple(i)))
+
+        reduced_points= []
+        reduced_pressure= []
+        reduced_v= []
+        reduced_u = []
+        for i in range(num_points):
+            point=points_array[i]
+            if -.5<point[0]<2 and -.5<point[1]<.5:
+                vel=velocity_array[i]
+                point.pop(2)
+                reduced_points.append(point)
+                reduced_pressure.append(pressure_array[i])
+                reduced_v.append(vel[1])
+                reduced_u.append(vel[0])
+
+        tpoints=torch.tensor(reduced_points)
+        tpressure=torch.tensor(reduced_pressure)
+        maxp=torch.max(tpressure)
+        tpressure=(tpressure-maxp/2)/tpressure
+        tu=torch.tensor(reduced_u)
+        maxu=torch.max(tu)
+        tu=(tu-maxu/2)/maxu
+        tv=torch.tensor(reduced_v)
+        maxv=torch.max(tv)
+        tv=(tv-maxv/2)/maxv
+        return tpoints,[tu,tv,tpressure]
+    
